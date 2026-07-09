@@ -1,111 +1,196 @@
-# Gem Hunt Quartz 0.2 - cleaned up the code
-import pygame # pyright: ignore
+# Gem Hunt Quartz 0.3 - total rework of the player class
+from __future__ import annotations
+import pygame
 from sys import exit
-from rich import print # pyright: ignore
+from rich import print
 from random import randint
 
 class Player():
+    # first the variable classes
+    class Position:
+        def __init__(self, x: float, y: float) -> None:
+            self.x = x
+            self.y = y
+
+    class Size:
+        def __init__(self, width: int, height: int) -> None:
+            self.width = width
+            self.height = height
+
+    class Velocity:
+        def __init__(self, x: float, y: float) -> None:
+            self.x = x
+            self.y = y
+
+    class Speed:
+        def __init__(self, max: float, standing_max: float, friction: float) -> None:
+            self.max = max
+            self.standing_max = standing_max
+            self.friction = friction
+
+    class Detection:
+        def __init__(self, fat: int, subtract: int) -> None:
+            self.fat = fat
+            self.subtract = subtract
+            self.middle = subtract / 2
+
     def __init__(self, x: float, y: float) -> None:
-        self.x: float = x
-        self.y: float = y
-        self.width: int = 75
-        self.height: int = 150
-        self.Y_vel: float = 0
-        self.allowleverpull: bool = False
-        self.debug: bool = False
-        self.makeplatformdebug: bool = True
+        # type definitons
+        self.position: Player.Position
+        self.size: Player.Size
+        self.velocity: Player.Velocity
+        self.speed: Player.Speed
+        self.allowleverpull: bool
+        self.jumpheight: float
+        self.detection_size: int
 
-    def vertical(self) -> None:
-        "Vertical Movement"
-        # if you're going up
-        if self.Y_vel <= 0:
+        # variables
+        self.position = self.Position(x, y)
+        self.size = self.Size(75, 150)
+        self.velocity = self.Velocity(0, 0)
+        self.speed = self.Speed(3.3, 1, 0.95)
+        self.detection = self.Detection(10, 6)
+        self.allowleverpull = False
+        self.jumpheight = 7.5
+
+    def gravity(self) -> None:
+        "gravity"
+        if self.velocity.y < 0:
             self.headhit()
-            return None
 
-        # bottom part of player
-        downPlayer = pygame.Rect(self.x + 5, (self.y + self.height) + self.Y_vel * dt, self.width - 10, 5)
-        touching_ground: bool = downPlayer.colliderect(ground) or any(downPlayer.colliderect(wall) for wall in currentLevelWalls)
- 
-        if touching_ground:
-            while touching_ground:
-                downPlayer.y -= 1
-                touching_ground: bool = downPlayer.colliderect(ground) or any(downPlayer.colliderect(wall) for wall in currentLevelWalls)
-            self.y = downPlayer.y - self.height + 5
-            self.Y_vel = min(self.Y_vel, 0)
-        
+        # make a future player and check if he touches the ground
+        future_x = self.position.x + self.detection.middle
+        future_y = (self.position.y + self.velocity.y) + self.size.height - self.detection.fat
+        future_width = self.size.width - self.detection.subtract
+        future_height = self.detection.fat
+
+        future_player = pygame.Rect(future_x, future_y, future_width, future_height)
+        will_touch_ground = any(future_player.colliderect(wall) for wall in currentLevelWalls)
+
+        pygame.draw.rect(Window, (255, 255, 255), future_player)
+
+        if will_touch_ground:
+            for wall in currentLevelWalls:
+                if future_player.colliderect(wall):
+                    self.position.y = wall.top - self.size.height
+                    self.velocity.y = 0
         else:
-            self.Y_vel += 1500 * dt
-            self.Y_vel = min(self.Y_vel, 2500)
-            self.y += self.Y_vel * dt
-
-        if self.debug:
-            pygame.draw.rect(Window, (255, 255, 255), downPlayer)
+            self.velocity.y += 15 * dt
+            min(self.velocity.y, 25)
+            self.position.y += self.velocity.y
 
     def horizontal(self, side: int) -> None:
         "Horizontal movement"
-        SiPX = self.x + (300 * side) * dt # sideplayerx
-        sidePlayer = pygame.Rect(SiPX + (70 / 2) + (int(side) * 70 / 2), self.y + 7.5, 5, 135)
-
-        if not any(sidePlayer.colliderect(wall) for wall in currentLevelWalls):
-            self.x = SiPX
-        else:
-            while any(sidePlayer.colliderect(wall) for wall in currentLevelWalls):
-                SiPX -= 1 * side
-                sidePlayer = pygame.Rect(SiPX + (70 / 2) + (int(side) * 70 / 2), self.y + 7.5, 5, 135)
-            self.x = SiPX
         
-        if self.debug:
-            pygame.draw.rect(Window, (255, 255, 255), sidePlayer)
+        # make future player
+        half_width = self.size.width / 2
+
+        if side != 0:
+            future_x = self.position.x + half_width + side * half_width + self.velocity.x - self.detection.fat / 2
+            detection_side = side
+        else:
+            # set side to the side u were moving
+            if self.velocity.x > self.speed.standing_max:
+                detection_side = 1
+            elif self.velocity.x < -self.speed.standing_max:
+                detection_side = -1
+            else:
+                # if you are not moving
+                detection_side = 0
+
+            future_x = self.position.x + half_width + detection_side * half_width + self.velocity.x - self.detection.fat / 2
+        
+        future_y = self.position.y + self.detection.middle
+        future_width = self.detection.fat
+        future_height = self.size.height - self.detection.subtract
+
+        future_player = pygame.Rect(future_x, future_y, future_width, future_height)
+        will_touch_walls = any(future_player.colliderect(wall) for wall in currentLevelWalls)
+
+        pygame.draw.rect(Window, (255, 255, 255), future_player)
+
+        if will_touch_walls:
+            for wall in currentLevelWalls:
+                if future_player.colliderect(wall):
+                    if detection_side == 1: # right
+                        self.position.x = wall.left - self.size.width
+                        self.velocity.x = 0
+
+                    if detection_side == -1: # left 
+                        self.position.x = wall.right
+                        self.velocity.x = 0
+        else:
+            # if (side != 0) and (self.velocity.x > 0) != (side > 0):
+            #     self.velocity.x = 0
+
+            self.velocity.x += (20 * side) * dt
+            
+            if side == 0:
+                self.velocity.x *= self.speed.friction
+                if -self.speed.standing_max < self.velocity.x < self.speed.standing_max:
+                    self.velocity.x = 0
+
+
+            self.velocity.x = min(self.speed.max, max(-self.speed.max, self.velocity.x))
+
+            self.position.x += self.velocity.x
 
     def headhit(self) -> None:
-            # top part of player
-            upPlayer = pygame.Rect(self.x + 6, self.y - 1, 65, 5)
+        # we make a future player
+        future_x = self.position.x + self.detection.middle
+        future_y = self.position.y + self.velocity.y
+        future_width = self.size.width - self.detection.subtract
+        future_height = self.detection.fat
 
-            if any(upPlayer.colliderect(wall) for wall in currentLevelWalls):
-                self.Y_vel = 0
-                # go down until not touching wall anymore
-                while any(upPlayer.colliderect(wall) for wall in currentLevelWalls):
-                    upPlayer = pygame.Rect(self.x + 6, self.y, 65, 5)
-                    self.y += 1
-            
-            self.Y_vel += 1500 * dt
-            self.Y_vel = min(self.Y_vel, 2500)
-            self.y += self.Y_vel * dt
-                        
-            if self.debug:
-                pygame.draw.rect(Window, (84, 213, 3), upPlayer)
-    
+        future_player = pygame.Rect(future_x, future_y, future_width, future_height)
+        
+
+        will_bonk = any(future_player.colliderect(wall) for wall in currentLevelWalls)
+
+        if will_bonk:
+            for wall in currentLevelWalls:
+                if future_player.colliderect(wall):
+                    self.position.y = wall.bottom
+                    self.velocity.y = 0
+
+        pygame.draw.rect(Window, (255, 255, 255), future_player)
+
+    def allow_jump(self) -> bool:
+        "Returns if you are touching the ground or the bottom of any walls"
+        future_player = pygame.Rect(self.position.x + 3, (self.position.y + self.velocity.y), self.size.width - 6, 150)
+        will_touch_ground = any(future_player.colliderect(wall) for wall in currentLevelWalls)
+
+        return will_touch_ground
+
+    def jump(self) -> None:
+        self.velocity.y = -self.jumpheight
+
     def checkpressed(self) -> None:
         "Checks wasd to move the player"
         keyPressed = pygame.key.get_pressed()
+        side = 0
+        
         if keyPressed[pygame.K_a]:
-            self.horizontal(side = -1)
+            side -= 1
         if keyPressed[pygame.K_d]:
-            self.horizontal(side = 1)
-        if keyPressed[pygame.K_w] and self.allowjump():
-            self.Y_vel = -jumpheight
-        if keyPressed[pygame.K_p]: # dev thing
-            print(pygame.mouse.get_pos())
-        if keyPressed[pygame.K_SPACE] and self.makeplatformdebug:
-            currentLevelWalls.append(pygame.Rect(self.x - 100, self.y + self.width * 2, 200, 50))
-            print(currentLevelWalls)
-            self.makeplatformdebug = False
-        elif not True in keyPressed:
-            self.makeplatformdebug = True
+            side += 1
+        
+        self.horizontal(side)
 
-    def MovementLoop(self) -> None:
+        if keyPressed[pygame.K_w] and self.allow_jump():
+            self.jump()
+
+    def movement_loop(self) -> None:
         "The movement loop for the player"
-        self.vertical()
+        self.gravity()
         self.checkpressed()
 
-    def allowjump(self) -> bool:
-        "Returns if you are touching the ground or the bottom of any walls"
-        downPlayer = pygame.Rect(self.x + 6, self.y + 146, 65, 5)
-        return (downPlayer.colliderect(ground) or any(downPlayer.colliderect(wall) for wall in currentLevelWalls))
+    def allow_dash(self):
+        return NotImplementedError("will be added later")
 
     def collidelever(self, lever: pygame.Rect, changedIndex: int) -> None:
         "Checks if you are fliping a lever and changes a list if so"
-        if pygame.Rect(self.x, self.y, self.width, self.height).colliderect(lever): # if you as rect are touching the lever 
+        if pygame.Rect(self.position.x, self.position.y, self.size.width, self.size.height).colliderect(lever): # if you as rect are touching the lever 
             keyPressed = pygame.key.get_pressed()
             if keyPressed[pygame.K_s]:
                 if self.allowleverpull:
@@ -115,31 +200,36 @@ class Player():
             else:
                 self.allowleverpull = True
 
+    def draw(self):
+        for player in players:
+            pygame.draw.rect(Window, (125, 0, 0), (player.position.x, player.position.y, player.size.width, player.size.height))
+            pygame.draw.rect(Window, (255, 0, 0), (player.position.x, player.position.y, player.size.width, player.size.height), 5)
+
 def levelEnds() -> None:
     "Changes levels if you are at the end of the screen"
     global level
 
     for player in players:
         # left
-        if player.x < 0:
+        if player.position.x < 0:
             level -= 10
-            player.x = windowSize[0] - 76
+            player.position.x = windowSize[0] - 76
 
         # right
-        if player.x > windowSize[0] - 75:
+        if player.position.x > windowSize[0] - 75:
             level += 10
-            player.x = 1
+            player.position.x = 1
 
         # up
-        if player.y < 0:
+        if player.position.y < 0:
             if level + 1 != 34:
                 level += 1
-                player.y = windowSize[1] - 151
+                player.position.y = windowSize[1] - 151
 
         # down
-        if player.y > windowSize[1] - 150:
+        if player.position.y > windowSize[1] - 150:
             level -= 1
-            player.y = 1
+            player.position.y = 1
 
 def levelDatabase() -> None:
     "Changes the level data depending on the level you are on"
@@ -161,6 +251,8 @@ def levelDatabase() -> None:
         ground = pygame.Rect(0, 850, windowSize[0], windowSize[1])
     else:
         ground = pygame.Rect(0, 0, 0, 0)
+
+    
 
     # level system
     global leverFliped
@@ -543,6 +635,8 @@ def levelDatabase() -> None:
         for player in players:
             player.collidelever(lever = lever, changedIndex = 1)
 
+    currentLevelWalls.append(ground)
+
 def draw() -> None:
     pygame.draw.rect(Window, (255, 0, 0), lever)
     pygame.draw.rect(Window, (255, 0, 0), lever2)
@@ -554,8 +648,7 @@ def draw() -> None:
     pygame.draw.rect(Window, (63, 171, 42), ground)
     
     for player in players:
-        pygame.draw.rect(Window, (125, 0, 0), (player.x, player.y, player.width, player.height))
-        pygame.draw.rect(Window, (255, 0, 0), (player.x, player.y, player.width, player.height), 5)
+        player.draw()
 
 def text(string: str, x: float, y: float, color: tuple[int, int, int] = (255, 255, 255)) -> None:
     "Draws text on the screen"
@@ -573,19 +666,19 @@ FPS: int
 windowSize: tuple[int, int]
 
 # variables
-players = [
-    Player(467, 400)
-    # Player(500, 500)
-]
-level = 33
+
+level = 21
 currentLevelWalls = []
 leverFliped = [False] * 20
 FPS = 120
-jumpheight = 800
 windowSize = (1920, 1019)
 lever_x = 1700
 lever2_x = -100
 final_score = 0
+players = [
+    Player(windowSize[0] // 2.5, windowSize[1] // 2)
+    # Player(500, 500)
+]
 
 # pygame things
 pygame.init()
@@ -608,7 +701,7 @@ while True:
         Window.fill((12, 12, 100))
         
         for player in players:
-            player.MovementLoop()
+            player.movement_loop()
 
         levelEnds()
         levelDatabase()
