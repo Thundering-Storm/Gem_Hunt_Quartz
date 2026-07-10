@@ -1,4 +1,4 @@
-# Gem Hunt Quartz 0.4.1 - bug fixes cuz i didnt test the version
+# Gem Hunt Quartz 0.4.2 - one extra thing
 from json import load, dump
 import pygame
 from rich import print
