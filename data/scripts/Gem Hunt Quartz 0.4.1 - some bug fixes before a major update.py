@@ -1,8 +1,8 @@
-# Gem Hunt Quartz 0.4 - total rework of leveldatabase
-from json import load
+# Gem Hunt Quartz 0.4.1 - bug fixes cuz i didnt test the version
+from json import load, dump
 import pygame
-from sys import exit
 from rich import print
+from sys import exit
 from random import randint
 
 class Player():
@@ -47,18 +47,17 @@ class Player():
         self.position = self.Position(x, y)
         self.size = self.Size(75, 150)
         self.velocity = self.Velocity(0, 0)
-        self.speed = self.Speed(3.3, 0.5, 0.95)
-        self.detection = self.Detection(10, 6)
-        self.jumpheight = 7.5
+        self.speed = self.Speed(444, 0.5, 0.95)
+        self.detection = self.Detection(5, 6)
+        self.jumpheight = 800
 
     def gravity(self) -> None:
-        "gravity"
         if self.velocity.y < 0:
             self.headhit()
 
         # make a future player and check if he touches the ground
         future_x = self.position.x + self.detection.middle
-        future_y = (self.position.y + self.velocity.y) + self.size.height - self.detection.fat
+        future_y = (self.position.y + self.velocity.y * dt) + self.size.height - self.detection.fat
         future_width = self.size.width - self.detection.subtract
         future_height = self.detection.fat
 
@@ -71,31 +70,24 @@ class Player():
                     self.position.y = wall.top - self.size.height
                     self.velocity.y = 0
         else:
-            self.velocity.y += 15 * dt
-            self.velocity.y = min(self.velocity.y, 50)
-            self.position.y += self.velocity.y
+            self.velocity.y += 1500 * dt
+            self.velocity.y = min(self.velocity.y, 2500)
+            self.position.y += self.velocity.y * dt
 
-    def horizontal(self, side: int) -> None:
+    def horizontal(self, movement_side: int) -> None:
         "Horizontal movement"
         
+        if self.velocity.x > self.speed.standing_max:
+            detection_side = 1
+        elif self.velocity.x < -self.speed.standing_max:
+            detection_side = -1
+        else:
+            detection_side = 0
+
         # make future player
         half_width = self.size.width / 2
 
-        if side != 0:
-            future_x = self.position.x + half_width + side * half_width + self.velocity.x - self.detection.fat / 2
-            detection_side = side
-        else:
-            # set side to the side u were moving
-            if self.velocity.x > self.speed.standing_max:
-                detection_side = 1
-            elif self.velocity.x < -self.speed.standing_max:
-                detection_side = -1
-            else:
-                # if you are not moving
-                detection_side = 0
-
-            future_x = self.position.x + half_width + detection_side * half_width + self.velocity.x - self.detection.fat / 2
-        
+        future_x = self.position.x + half_width + detection_side * half_width + self.velocity.x * dt - self.detection.fat / 2
         future_y = self.position.y + self.detection.middle
         future_width = self.detection.fat
         future_height = self.size.height - self.detection.subtract
@@ -114,31 +106,25 @@ class Player():
                         self.position.x = wall.right
                         self.velocity.x = 0
         else:
-            # if (side != 0) and (self.velocity.x > 0) != (side > 0):
-            #     self.velocity.x = 0
-
-            self.velocity.x += (20 * side) * dt
+            self.velocity.x += (2000 * movement_side) * dt
             
-            if side == 0:
+            if movement_side == 0:
                 self.velocity.x *= self.speed.friction
                 if -self.speed.standing_max < self.velocity.x < self.speed.standing_max:
                     self.velocity.x = 0
 
-
             self.velocity.x = min(self.speed.max, max(-self.speed.max, self.velocity.x))
 
-            self.position.x += self.velocity.x
+            self.position.x += self.velocity.x * dt
 
     def headhit(self) -> None:
         # we make a future player
         future_x = self.position.x + self.detection.middle
-        future_y = self.position.y + self.velocity.y
+        future_y = self.position.y + self.velocity.y * dt
         future_width = self.size.width - self.detection.subtract
         future_height = self.detection.fat
 
         future_player = pygame.Rect(future_x, future_y, future_width, future_height)
-        
-
         will_bonk = any(future_player.colliderect(wall) for wall in wall_list)
 
         if will_bonk:
@@ -149,7 +135,7 @@ class Player():
 
     def allow_jump(self) -> bool:
         "Returns if you are touching the ground or the bottom of any walls"
-        future_player = pygame.Rect(self.position.x + 3, (self.position.y + self.velocity.y), self.size.width - 6, 150)
+        future_player = pygame.Rect(self.position.x + 3, (self.position.y + self.velocity.y * dt), self.size.width - 6, 150)
         will_touch_ground = any(future_player.colliderect(wall) for wall in wall_list)
 
         return will_touch_ground
@@ -180,39 +166,34 @@ class Player():
     def allow_dash(self):
         return NotImplementedError("will be added later")
     
-    def rect(self):
+    def rect(self) -> pygame.Rect:
         return pygame.Rect(self.position.x, self.position.y, self.size.width, self.size.height)
 
-    def draw(self):
-        for player in players:
-            pygame.draw.rect(Window, (125, 0, 0), (player.position.x, player.position.y, player.size.width, player.size.height))
-            pygame.draw.rect(Window, (255, 0, 0), (player.position.x, player.position.y, player.size.width, player.size.height), 5)
+    def draw(self) -> None:
+        pygame.draw.rect(Window, (125, 0, 0), (self.position.x, self.position.y, self.size.width, self.size.height))
+        pygame.draw.rect(Window, (255, 0, 0), (self.position.x, self.position.y, self.size.width, self.size.height), 5)
 
-def levelEnds() -> None:
-    "Changes levels if you are at the end of the screen"
-    global level
-
-    for player in players:
+    def level_ends(self) -> None:
         # left
-        if player.position.x < 0:
+        if self.position.x < 0:
             level[0] -= 1
-            player.position.x = windowSize[0] - player.size.width - 1
+            self.position.x = windowSize[0] - self.size.width - 1
 
         # right
-        if player.position.x > windowSize[0] - player.size.width:
+        if self.position.x > windowSize[0] - self.size.width:
             level[0] += 1
-            player.position.x = 1
+            self.position.x = 1
 
         # up
-        if player.position.y < 0:
+        if self.position.y < 0:
             if level[1] + 1 != 34:
                 level[1] += 1
-                player.position.y = windowSize[1] - player.size.height - 1
+                self.position.y = windowSize[1] - self.size.height - 1
 
         # down
-        if player.position.y > windowSize[1] - player.size.height:
+        if self.position.y > windowSize[1] - self.size.height:
             level[1] -= 1
-            player.position.y = 1
+            self.position.y = 1
 
 def level_loader() -> None:
     # first we load the data
@@ -221,44 +202,19 @@ def level_loader() -> None:
             data = load(levelData)[str(level)]
     except KeyError:
         raise ValueError("Illegal level") from None
+    
 
     # we load the walls that cant change
-    wall_positions = data["wallData"]["walls"]
-
     global wall_list
     wall_list = []
-    try:
-        for wall_square in wall_positions:
-            wall = (wall_square[0], wall_square[1], wall_square[2], wall_square[3])
-            
-            wall_list.append(pygame.Rect(wall))
-    except:
-        raise NotImplementedError("moron u need to remove the final lists") from None
 
+    wall_positions = data["wallData"]["walls"]
 
-    # now we load the levers
-    leverData: dict = data["leverData"]
+    for wall in wall_positions:
+        wall_list.append(pygame.Rect(wall))
+    
 
-    for name, info in leverData.items():
-        position = info["position"]
-
-        if len(position) == 4:
-            levers[name]["position"] = pygame.Rect(position)
-        else:
-            levers[name]["position"] = pygame.Rect(0, 0, 0, 0)
-
-
-    # now we load the extra data (f.e the ground)
-    extraData = data["extraData"]
-
-    global ground
-
-    if "ground" in extraData:
-        ground = pygame.Rect(0, 850, windowSize[0], windowSize[1])
-        wall_list.append(ground)
-
-
-    # now we load the walls loaded by switch
+    # now we load the walls that can change
     switchWalls = data["wallData"]["switchWalls"]
 
     for wall in switchWalls:
@@ -268,6 +224,36 @@ def level_loader() -> None:
 
         if lever_flipped[index] == wall_bool:
             wall_list.append(pygame.Rect(position))
+
+
+    # now we load the levers
+    leverData: dict = data["leverData"]
+
+    for name, info in leverData.items():
+        position = info["position"]
+
+        if len(position) == 4: # this is used as a way to know that its a real lever
+            levers[name]["position"] = pygame.Rect(position)
+            levers[name]["index"] = info["index"]
+        else:
+            levers[name]["position"] = pygame.Rect(0, 0, 0, 0)
+
+
+    # now we load the extra data (f.e the ground)
+    global ground, final_score
+    ground = pygame.Rect(0, 0, 0, 0)
+
+    extraData = data["extraData"]
+
+    if "ground" in extraData:
+        ground = pygame.Rect(0, 850, windowSize[0], windowSize[1])
+        wall_list.append(ground)
+
+    if "final_level" in extraData:
+        lever_data = leverData["lever1"]["position"]
+        levers["lever1"]["position"] = pygame.Rect(lever1_x, lever_data[1], lever_data[2], lever_data[3])
+        lever_data = leverData["lever2"]["position"]
+        levers["lever2"]["position"] = pygame.Rect(lever2_x, lever_data[1], lever_data[2], lever_data[3])
 
 def level_modifier():
     global allow_lever_pull
@@ -286,9 +272,28 @@ def level_modifier():
                     if allow_lever_pull:
                         allow_lever_pull = False
                         lever_flipped[index] = not(lever_flipped[index])
+                        print(f'Flipped: {index}')
+
                         level_loader()
                 else:
                     allow_lever_pull = True
+
+    global lever1_x, lever2_x, final_score
+
+    if lever_flipped[16]:
+        lever_flipped[16] = False
+        lever_flipped[18] = True
+        lever1_x = -100
+        lever2_x = randint(200, 1720)
+        level_loader()
+
+    if lever_flipped[17]:
+        lever_flipped[17] = False
+        lever2_x = randint(200, 1720)
+        final_score += 1
+
+    if 2 < final_score < 5:
+        text("gg", 1920 / 2, 1080 / 2, (255, 255, 255))
 
 def draw() -> None:
     for name, info in levers.items():
@@ -301,8 +306,12 @@ def draw() -> None:
     for wall in wall_list:
         pygame.draw.rect(Window, (75, 75, 75), wall)
     
-    # pygame.draw.rect(Window, (63, 171, 42), ground)
-    
+    try:
+        pygame.draw.rect(Window, (63, 171, 42), ground)
+    except:
+        # there is no ground
+        pass
+
     for player in players:
         player.draw()
 
@@ -316,40 +325,40 @@ def text(string: str, x: float, y: float, color: tuple[int, int, int] = (255, 25
 # set the type definitions for the variables
 players: list[Player]
 level: list[int]
+level_last_frame: list[int]
+FPS: int
+
+lever1_x: int
+lever2_x: int
+final_score: int
+wall_list: list[pygame.Rect]
+levers: dict
 lever_flipped: list[bool]
 FPS: int
-windowSize: tuple[int, int]
+
 
 # variables
-
-level = [1, 1]
+level = [2, 1]
 level_last_frame = [0, 0]
-FPS = 120
-
-lever_x = 1700
-lever2_x = -100
-final_score = 0
-
 wall_list = []
-levers: dict
 levers = {
     "lever1": {"position": pygame.Rect(0, 0, 0, 0), "index": 0},
     "lever2": {"position": pygame.Rect(0, 0, 0, 0), "index": 0},
     "lever3": {"position": pygame.Rect(0, 0, 0, 0), "index": 0}
 }
+lever_flipped = [False] * 19
+lever1_x = 1700
+lever2_x = -100
+final_score = 0
 
-lever_flipped = [False] * 20
-
-players = [
-    Player(768, 509)
-]
-
-windowSize = (1920, 1019)
+players = [Player(768, 509)]
+FPS = 120
 
 # pygame things
 pygame.init()
+windowSize = (1920, 1019)
 Window = pygame.display.set_mode(windowSize)
-pygame.display.set_caption("Gem Hunt Quartz 0.4")
+pygame.display.set_caption("Gem Hunt Quartz 0.4.1")
 clock = pygame.time.Clock()
 
 # game loop
@@ -368,8 +377,7 @@ while True:
         
         for player in players:
             player.movement_loop()
-
-        levelEnds()
+            player.level_ends()
         
         if level != level_last_frame:
             level_loader()
