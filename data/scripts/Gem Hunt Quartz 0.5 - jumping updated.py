@@ -1,4 +1,4 @@
-# Gem Hunt Quartz 0.4.2 - one extra thing
+# Gem Hunt Quartz 0.5 - jumping updated
 from json import load, dump
 import pygame
 from rich import print
@@ -13,26 +13,46 @@ class Player():
             self.y = y
 
     class Size:
-        def __init__(self, width: int, height: int) -> None:
-            self.width = width
-            self.height = height
+        def __init__(self) -> None:
+            self.width: int
+            self.height: int
+
+            self.width = 75
+            self.height = 150
 
     class Velocity:
-        def __init__(self, x: float, y: float) -> None:
-            self.x = x
-            self.y = y
+        def __init__(self) -> None:
+            self.x: float
+            self.y: float
+            
+            self.x = 0
+            self.y = 0
 
     class Speed:
-        def __init__(self, max: float, standing_max: float, friction: float) -> None:
-            self.max = max
-            self.standing_max = standing_max
-            self.friction = friction
+        def __init__(self) -> None:
+            self.max: float
+            self.standing_max: float
+            self.friction: float
+
+            self.max = 350
+            self.standing_max = 0.5
+            self.friction = 0.9
+
+    class Jump:
+        def __init__(self) -> None:
+            self.jumping = False
+            self.force = 800
+            self.release_force = 150
 
     class Detection:
-        def __init__(self, fat: int, subtract: int) -> None:
-            self.fat = fat
-            self.subtract = subtract
-            self.middle = subtract / 2
+        def __init__(self) -> None:
+            self.fat: int
+            self.subtract: int
+            self.middle: float
+
+            self.fat = 5
+            self.subtract = 6
+            self.middle = self.subtract / 2
 
     def __init__(self, x: float, y: float) -> None:
         # type definitons
@@ -42,14 +62,15 @@ class Player():
         self.speed: Player.Speed
         self.jumpheight: float
         self.detection_size: int
+        self.jump_amount_held: float
 
         # variables
         self.position = self.Position(x, y)
-        self.size = self.Size(75, 150)
-        self.velocity = self.Velocity(0, 0)
-        self.speed = self.Speed(444, 0.5, 0.95)
-        self.detection = self.Detection(5, 6)
-        self.jumpheight = 800
+        self.size = self.Size()
+        self.velocity = self.Velocity()
+        self.speed = self.Speed()
+        self.detection = self.Detection()
+        self.jump = self.Jump()
 
     def gravity(self) -> None:
         if self.velocity.y < 0:
@@ -69,6 +90,8 @@ class Player():
                 if future_player.colliderect(wall):
                     self.position.y = wall.top - self.size.height
                     self.velocity.y = 0
+                    self.jumping = False
+                    break
         else:
             self.velocity.y += 1500 * dt
             self.velocity.y = min(self.velocity.y, 2500)
@@ -133,39 +156,57 @@ class Player():
                     self.position.y = wall.bottom
                     self.velocity.y = 0
 
-    def allow_jump(self) -> bool:
-        "Returns if you are touching the ground or the bottom of any walls"
-        future_player = pygame.Rect(self.position.x + 3, (self.position.y + self.velocity.y * dt), self.size.width - 6, 150)
-        will_touch_ground = any(future_player.colliderect(wall) for wall in wall_list)
-
-        return will_touch_ground
-
-    def jump(self) -> None:
-        self.velocity.y = -self.jumpheight
-
     def checkpressed(self) -> None:
-        "Checks wasd to move the player"
         keyPressed = pygame.key.get_pressed()
+        
+        left_pressed = any(keyPressed[key] for key in KEYS_LEFT)
+        right_pressed = any(keyPressed[key] for key in KEYS_RIGHT)
+        jump_pressed = any(keyPressed[key] for key in KEYS_UP)
+        
         side = 0
-        
-        if keyPressed[pygame.K_a]:
+
+        if left_pressed:
             side -= 1
-        if keyPressed[pygame.K_d]:
+        if right_pressed:
             side += 1
-        
+
         self.horizontal(side)
 
-        if keyPressed[pygame.K_w] and self.allow_jump():
-            self.jump()
+        if jump_pressed and self.touching_ground() and not self.jump.jumping:
+            self.velocity.y = -self.jump.force
+            self.jump.jumping = True
+
+        if self.jump.jumping:
+            if jump_pressed:
+                pass
+            else:
+                self.jump.jumping = False
+                if self.velocity.y < -self.jump.release_force:
+                    self.velocity.y = -self.jump.release_force
 
     def movement_loop(self) -> None:
         "The movement loop for the player"
-        self.gravity()
         self.checkpressed()
+        self.gravity()
 
     def allow_dash(self):
         return NotImplementedError("will be added later")
-    
+
+    def touching_ground(self) -> bool:
+        # make a future player and check if he touches the ground
+        future_x = self.position.x + self.detection.middle
+        future_y = (self.position.y + self.velocity.y * dt) + self.size.height - self.detection.fat
+        future_width = self.size.width - self.detection.subtract
+        future_height = self.detection.fat
+
+        future_player = pygame.Rect(future_x, future_y, future_width, future_height)
+        will_touch_ground = any(future_player.colliderect(wall) for wall in wall_list)
+
+        if will_touch_ground:
+            return True
+        else:
+            return False
+
     def rect(self) -> pygame.Rect:
         return pygame.Rect(self.position.x, self.position.y, self.size.width, self.size.height)
 
@@ -174,6 +215,7 @@ class Player():
         pygame.draw.rect(Window, (255, 0, 0), (self.position.x, self.position.y, self.size.width, self.size.height), 5)
 
     def level_ends(self) -> None:
+        global level
         # left
         if self.position.x < 0:
             level[0] -= 1
@@ -255,7 +297,7 @@ def level_loader() -> None:
         lever_data = leverData["lever2"]["position"]
         levers["lever2"]["position"] = pygame.Rect(lever2_x, lever_data[1], lever_data[2], lever_data[3])
 
-def level_modifier():
+def level_modifier() -> None:
     global allow_lever_pull
     
     for player in players:
@@ -272,7 +314,6 @@ def level_modifier():
                     if allow_lever_pull:
                         allow_lever_pull = False
                         lever_flipped[index] = not(lever_flipped[index])
-                        print(f'Flipped: {index}')
 
                         level_loader()
                 else:
@@ -327,7 +368,6 @@ players: list[Player]
 level: list[int]
 level_last_frame: list[int]
 FPS: int
-
 lever1_x: int
 lever2_x: int
 final_score: int
@@ -335,7 +375,6 @@ wall_list: list[pygame.Rect]
 levers: dict
 lever_flipped: list[bool]
 FPS: int
-
 
 # variables
 level = [2, 1]
@@ -350,15 +389,19 @@ lever_flipped = [False] * 19
 lever1_x = 1700
 lever2_x = -100
 final_score = 0
-
 players = [Player(768, 509)]
 FPS = 120
+
+KEYS_LEFT = [pygame.K_a, pygame.K_j, pygame.K_LEFT]
+KEYS_RIGHT = [pygame.K_d, pygame.K_l, pygame.K_RIGHT]
+KEYS_UP = [pygame.K_w, pygame.K_SPACE, pygame.K_i, pygame.K_UP]
+KEYS_DOWN = [pygame.K_s, pygame.K_k, pygame.K_DOWN]
 
 # pygame things
 pygame.init()
 windowSize = (1920, 1019)
 Window = pygame.display.set_mode(windowSize)
-pygame.display.set_caption("Gem Hunt Quartz 0.4.1")
+pygame.display.set_caption("Gem Hunt Quartz 0.5")
 clock = pygame.time.Clock()
 
 # game loop
