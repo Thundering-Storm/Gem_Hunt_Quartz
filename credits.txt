@@ -1,0 +1,30 @@
+https://freesound.org/people/cabled_mess/sounds/350906/ - jump
+https://freesound.org/people/EVRetro/sounds/501102/ - walk
+https://freesound.org/people/Artninja/sounds/845787/ - levers
+https://freesound.org/people/theoctopus559/sounds/624363/ - background music, cut a bit
+
+
+jump:
+Jump_C_04 by cabled_mess -- https://freesound.org/s/350906/ -- License: Creative Commons 0
+
+
+footsteps:
+8-bit footsteps.wav by EVRetro -- https://freesound.org/s/501102/ -- License: Creative Commons 0
+
+
+lever: 
+custom_lever_pulling_sounds_02182026 by Artninja -- https://freesound.org/s/845787/ -- License: Attribution 4.0
+
+bread_toaster_oven_lever_push_down_w_bread by Artninja -- https://freesound.org/s/751166/ -- License: Attribution 4.0
+
+Shift-of-the-seat.wav by 14FValtrovaT -- https://freesound.org/s/419699/ -- License: Attribution NonCommercial 3.0
+
+Closing Metal Door.wav by Mrthenoronha -- https://freesound.org/s/405418/ -- License: Attribution NonCommercial 4.0
+
+Rautatievaihde, vaihde / Manual railway switch, points, metal lever rattling and clicking, railway yard by YleArkisto -- https://freesound.org/s/334138/ -- License: Attribution 4.0
+
+Column Gear Select Up (mono).wav by E-Audio -- https://freesound.org/s/118243/ -- License: Creative Commons 0
+
+
+background music:
+background music loop drums by theoctopus559 -- https://freesound.org/s/624363/ -- License: Attribution 4.0

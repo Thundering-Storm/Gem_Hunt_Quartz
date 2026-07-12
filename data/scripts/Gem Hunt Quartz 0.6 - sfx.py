@@ -1,9 +1,9 @@
-# Gem Hunt Quartz 0.5 - jumping updated
+# Gem Hunt Quartz 0.6 - sfx
 from json import load, dump
 import pygame
 from rich import print
 from sys import exit
-from random import randint
+from random import randint, choice
 
 class Player():
     # first the variable classes
@@ -33,13 +33,20 @@ class Player():
             self.max: float
             self.standing_max: float
             self.friction: float
+            self.sfx_max: float
 
             self.max = 350
-            self.standing_max = 0.5
+            self.standing_max = 25
             self.friction = 0.9
+            self.sfx_max = 50
 
     class Jump:
         def __init__(self) -> None:
+            self.jumping: bool
+            self.force: int
+            self.release_force: int
+
+
             self.jumping = False
             self.force = 800
             self.release_force = 150
@@ -71,6 +78,7 @@ class Player():
         self.speed = self.Speed()
         self.detection = self.Detection()
         self.jump = self.Jump()
+        self.playing_walk_sfx = False
 
     def gravity(self) -> None:
         if self.velocity.y < 0:
@@ -78,7 +86,7 @@ class Player():
 
         # make a future player and check if he touches the ground
         future_x = self.position.x + self.detection.middle
-        future_y = (self.position.y + self.velocity.y * dt) + self.size.height - self.detection.fat
+        future_y = (self.position.y + self.velocity.y * dt) + self.size.height - self.detection.fat + 1
         future_width = self.size.width - self.detection.subtract
         future_height = self.detection.fat
 
@@ -110,7 +118,7 @@ class Player():
         # make future player
         half_width = self.size.width / 2
 
-        future_x = self.position.x + half_width + detection_side * half_width + self.velocity.x * dt - self.detection.fat / 2
+        future_x = self.position.x + half_width + detection_side * half_width + self.velocity.x * dt - self.detection.fat / 2 + 1 * detection_side
         future_y = self.position.y + self.detection.middle
         future_width = self.detection.fat
         future_height = self.size.height - self.detection.subtract
@@ -139,6 +147,17 @@ class Player():
             self.velocity.x = min(self.speed.max, max(-self.speed.max, self.velocity.x))
 
             self.position.x += self.velocity.x * dt
+
+
+
+        # play sfx
+        if self.touching_ground() and abs(self.velocity.x) > self.speed.sfx_max:
+            if not self.playing_walk_sfx:
+                walk_channel.unpause()
+                self.playing_walk_sfx = True
+        else:
+            walk_channel.pause()
+            self.playing_walk_sfx = False
 
     def headhit(self) -> None:
         # we make a future player
@@ -175,6 +194,7 @@ class Player():
         if jump_pressed and self.touching_ground() and not self.jump.jumping:
             self.velocity.y = -self.jump.force
             self.jump.jumping = True
+            sfx_jump.play()
 
         if self.jump.jumping:
             if jump_pressed:
@@ -195,7 +215,7 @@ class Player():
     def touching_ground(self) -> bool:
         # make a future player and check if he touches the ground
         future_x = self.position.x + self.detection.middle
-        future_y = (self.position.y + self.velocity.y * dt) + self.size.height - self.detection.fat
+        future_y = (self.position.y + self.velocity.y * dt) + self.size.height - self.detection.fat + 1
         future_width = self.size.width - self.detection.subtract
         future_height = self.detection.fat
 
@@ -315,6 +335,8 @@ def level_modifier() -> None:
                         allow_lever_pull = False
                         lever_flipped[index] = not(lever_flipped[index])
 
+                        lever_sfxs[randint(1, 8)].play()
+
                         level_loader()
                 else:
                     allow_lever_pull = True
@@ -356,6 +378,7 @@ def draw() -> None:
     for player in players:
         player.draw()
 
+
 def text(string: str, x: float, y: float, color: tuple[int, int, int] = (255, 255, 255)) -> None:
     "Draws text on the screen"
 
@@ -377,6 +400,7 @@ lever_flipped: list[bool]
 FPS: int
 
 # variables
+counter_bgm = 0
 level = [2, 1]
 level_last_frame = [0, 0]
 wall_list = []
@@ -391,6 +415,7 @@ lever2_x = -100
 final_score = 0
 players = [Player(768, 509)]
 FPS = 120
+allow_lever_pull = True
 
 KEYS_LEFT = [pygame.K_a, pygame.K_j, pygame.K_LEFT]
 KEYS_RIGHT = [pygame.K_d, pygame.K_l, pygame.K_RIGHT]
@@ -398,11 +423,36 @@ KEYS_UP = [pygame.K_w, pygame.K_SPACE, pygame.K_i, pygame.K_UP]
 KEYS_DOWN = [pygame.K_s, pygame.K_k, pygame.K_DOWN]
 
 # pygame things
+pygame.mixer.pre_init(48000, -16, 2, 256)
 pygame.init()
+pygame.mixer.init()
+pygame.mixer.set_num_channels(32)
 windowSize = (1920, 1019)
 Window = pygame.display.set_mode(windowSize)
 pygame.display.set_caption("Gem Hunt Quartz 0.5")
-clock = pygame.time.Clock()
+clock = pygame.time.Clock() 
+
+sfx_jump = pygame.mixer.Sound("data/assets/jump.wav")
+sfx_walk = pygame.mixer.Sound("data/assets/walk.wav")
+
+walk_channel = pygame.mixer.Channel(0)
+walk_channel.play(sfx_walk, -1)
+walk_channel.pause()
+
+sfx_lever1 = pygame.mixer.Sound("data/assets/lever/lever1.wav")
+sfx_lever2 = pygame.mixer.Sound("data/assets/lever/lever2.wav")
+sfx_lever3 = pygame.mixer.Sound("data/assets/lever/lever3.wav")
+sfx_lever4 = pygame.mixer.Sound("data/assets/lever/lever4.wav")
+sfx_lever5 = pygame.mixer.Sound("data/assets/lever/lever5.wav")
+sfx_lever6 = pygame.mixer.Sound("data/assets/lever/lever6.wav")
+sfx_lever7 = pygame.mixer.Sound("data/assets/lever/lever7.wav")
+sfx_lever8 = pygame.mixer.Sound("data/assets/lever/lever8.wav") 
+
+lever_sfxs = [sfx_lever1, sfx_lever2, sfx_lever3, sfx_lever4, sfx_lever5, sfx_lever6, sfx_lever7, sfx_lever8]
+
+bgm = pygame.mixer.music.load("data/assets/bgm.wav")
+pygame.mixer.music.set_volume(1)
+pygame.mixer.music.play(-1)
 
 # game loop
 while True:
@@ -426,7 +476,6 @@ while True:
             level_loader()
         level_modifier()
         draw()
-        
 
         pygame.display.update()
 
