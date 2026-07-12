@@ -1,4 +1,4 @@
-# Gem Hunt Quartz 0.6 - sfx
+# Gem Hunt Quartz 0.6.1 - fixed bugs
 from json import load, dump
 import pygame
 from rich import print
@@ -429,28 +429,28 @@ pygame.mixer.init()
 pygame.mixer.set_num_channels(32)
 windowSize = (1920, 1019)
 Window = pygame.display.set_mode(windowSize)
-pygame.display.set_caption("Gem Hunt Quartz 0.5")
+pygame.display.set_caption("Gem Hunt Quartz 0.6.1")
 clock = pygame.time.Clock() 
 
-sfx_jump = pygame.mixer.Sound("data/assets/jump.wav")
-sfx_walk = pygame.mixer.Sound("data/assets/walk.wav")
+sfx_jump = pygame.mixer.Sound("data/assets/sfx/jump.wav")
+sfx_walk = pygame.mixer.Sound("data/assets/sfx/walk.wav")
 
 walk_channel = pygame.mixer.Channel(0)
 walk_channel.play(sfx_walk, -1)
 walk_channel.pause()
 
-sfx_lever1 = pygame.mixer.Sound("data/assets/lever/lever1.wav")
-sfx_lever2 = pygame.mixer.Sound("data/assets/lever/lever2.wav")
-sfx_lever3 = pygame.mixer.Sound("data/assets/lever/lever3.wav")
-sfx_lever4 = pygame.mixer.Sound("data/assets/lever/lever4.wav")
-sfx_lever5 = pygame.mixer.Sound("data/assets/lever/lever5.wav")
-sfx_lever6 = pygame.mixer.Sound("data/assets/lever/lever6.wav")
-sfx_lever7 = pygame.mixer.Sound("data/assets/lever/lever7.wav")
-sfx_lever8 = pygame.mixer.Sound("data/assets/lever/lever8.wav") 
+sfx_lever1 = pygame.mixer.Sound("data/assets/sfx/lever/lever1.wav")
+sfx_lever2 = pygame.mixer.Sound("data/assets/sfx/lever/lever2.wav")
+sfx_lever3 = pygame.mixer.Sound("data/assets/sfx/lever/lever3.wav")
+sfx_lever4 = pygame.mixer.Sound("data/assets/sfx/lever/lever4.wav")
+sfx_lever5 = pygame.mixer.Sound("data/assets/sfx/lever/lever5.wav")
+sfx_lever6 = pygame.mixer.Sound("data/assets/sfx/lever/lever6.wav")
+sfx_lever7 = pygame.mixer.Sound("data/assets/sfx/lever/lever7.wav")
+sfx_lever8 = pygame.mixer.Sound("data/assets/sfx/lever/lever8.wav") 
 
 lever_sfxs = [sfx_lever1, sfx_lever2, sfx_lever3, sfx_lever4, sfx_lever5, sfx_lever6, sfx_lever7, sfx_lever8]
 
-bgm = pygame.mixer.music.load("data/assets/bgm.wav")
+bgm = pygame.mixer.music.load("data/assets/sfx/bgm.wav")
 pygame.mixer.music.set_volume(1)
 pygame.mixer.music.play(-1)
 
