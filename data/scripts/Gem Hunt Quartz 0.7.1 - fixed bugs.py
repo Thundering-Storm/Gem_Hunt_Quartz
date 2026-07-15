@@ -1,4 +1,4 @@
-# Gem Hunt Quartz 0.7 - dashes
+# Gem Hunt Quartz 0.7.1 - fixed bug
 from json import load, dump
 from typing import Any
 import pygame
@@ -187,7 +187,9 @@ class Player():
                 else:
                     excess_velocity *= self.friction.standing
 
-                excess_velocity += (50 * movement_side) * dt
+                if movement_side != detection_side:
+                    excess_velocity += (self.acceleration.x * movement_side) * dt
+
                 self.velocity.x = (self.max_speed.moving + excess_velocity) * detection_side
 
             else:
