@@ -1,9 +1,10 @@
-# Gem Hunt Quartz 0.6.1 - fixed bugs
+# Gem Hunt Quartz 0.7 - dashes
 from json import load, dump
+from typing import Any
 import pygame
 from rich import print
 from sys import exit
-from random import randint, choice
+from random import randint
 
 class Player():
     # first the variable classes
@@ -28,17 +29,47 @@ class Player():
             self.x = 0
             self.y = 0
 
-    class Speed:
+    class Acceleration:
         def __init__(self) -> None:
-            self.max: float
-            self.standing_max: float
-            self.friction: float
-            self.sfx_max: float
+            self.x: int
+            self.y: int
 
-            self.max = 350
-            self.standing_max = 25
-            self.friction = 0.9
-            self.sfx_max = 50
+            self.x = 1100
+            self.y = 1500
+
+    class MaxSpeed:
+        def __init__(self) -> None:
+            self.moving: float
+            self.standing: float
+            self.sfx: float
+            self.falling: float
+
+            self.moving = 350
+            self.standing = 25
+            self.sfx = 50
+            self.falling = 2500
+
+    class Friction:
+        def __init__(self) -> None:
+            self.standing: float
+            self.dashing: float
+
+            self.standing = 0.9
+            self.dashing = 0.95
+
+    class Dash:
+        def __init__(self) -> None:
+            self.timer: float
+            self.max: float
+            self.dashing: bool
+            self.boost_x: int
+            self.boost_y: int
+
+            self.dashing = False
+            self.timer = 0
+            self.max = 1
+            self.boost_x = 1000
+            self.boost_y = -500
 
     class Jump:
         def __init__(self) -> None:
@@ -46,18 +77,17 @@ class Player():
             self.force: int
             self.release_force: int
 
-
             self.jumping = False
             self.force = 800
             self.release_force = 150
 
     class Detection:
         def __init__(self) -> None:
-            self.fat: int
+            self.size: int
             self.subtract: int
             self.middle: float
 
-            self.fat = 5
+            self.size = 5
             self.subtract = 6
             self.middle = self.subtract / 2
 
@@ -66,29 +96,30 @@ class Player():
         self.position: Player.Position
         self.size: Player.Size
         self.velocity: Player.Velocity
-        self.speed: Player.Speed
-        self.jumpheight: float
-        self.detection_size: int
-        self.jump_amount_held: float
+        self.speed: Player.MaxSpeed
+        self.friction: Player.Friction
 
         # variables
         self.position = self.Position(x, y)
         self.size = self.Size()
         self.velocity = self.Velocity()
-        self.speed = self.Speed()
+        self.max_speed = self.MaxSpeed()
         self.detection = self.Detection()
         self.jump = self.Jump()
+        self.dash = self.Dash()
+        self.friction = self.Friction()
+        self.acceleration = self.Acceleration()
         self.playing_walk_sfx = False
 
     def gravity(self) -> None:
-        if self.velocity.y < 0:
+        if self.velocity.y <= 0:
             self.headhit()
 
         # make a future player and check if he touches the ground
         future_x = self.position.x + self.detection.middle
-        future_y = (self.position.y + self.velocity.y * dt) + self.size.height - self.detection.fat + 1
+        future_y = (self.position.y + self.velocity.y * dt) + self.size.height - self.detection.size + 1
         future_width = self.size.width - self.detection.subtract
-        future_height = self.detection.fat
+        future_height = self.detection.size
 
         future_player = pygame.Rect(future_x, future_y, future_width, future_height)
         will_touch_ground = any(future_player.colliderect(wall) for wall in wall_list)
@@ -101,32 +132,34 @@ class Player():
                     self.jumping = False
                     break
         else:
-            self.velocity.y += 1500 * dt
-            self.velocity.y = min(self.velocity.y, 2500)
+            self.velocity.y += self.acceleration.y * dt
+            self.velocity.y = min(self.velocity.y, self.max_speed.falling)
             self.position.y += self.velocity.y * dt
 
     def horizontal(self, movement_side: int) -> None:
         "Horizontal movement"
         
-        if self.velocity.x > self.speed.standing_max:
+        # set detection side
+        if self.velocity.x > self.max_speed.standing:
             detection_side = 1
-        elif self.velocity.x < -self.speed.standing_max:
+        elif self.velocity.x < -self.max_speed.standing:
             detection_side = -1
         else:
             detection_side = 0
 
-        # make future player
         half_width = self.size.width / 2
 
-        future_x = self.position.x + half_width + detection_side * half_width + self.velocity.x * dt - self.detection.fat / 2 + 1 * detection_side
+        future_x = self.position.x + half_width + detection_side * half_width + self.velocity.x * dt - self.detection.size / 2 + (1 * detection_side)
         future_y = self.position.y + self.detection.middle
-        future_width = self.detection.fat
+        future_width = self.detection.size
         future_height = self.size.height - self.detection.subtract
 
         future_player = pygame.Rect(future_x, future_y, future_width, future_height)
         will_touch_walls = any(future_player.colliderect(wall) for wall in wall_list)
 
         if will_touch_walls:
+            # move you away from the walls
+
             for wall in wall_list:
                 if future_player.colliderect(wall):
                     if detection_side == 1: # right
@@ -137,21 +170,33 @@ class Player():
                         self.position.x = wall.right
                         self.velocity.x = 0
         else:
-            self.velocity.x += (2000 * movement_side) * dt
-            
+            # apply velocity
+
             if movement_side == 0:
-                self.velocity.x *= self.speed.friction
-                if -self.speed.standing_max < self.velocity.x < self.speed.standing_max:
+                # apply friction
+                self.velocity.x *= self.friction.standing
+                if abs(self.velocity.x) < self.max_speed.standing:
                     self.velocity.x = 0
 
-            self.velocity.x = min(self.speed.max, max(-self.speed.max, self.velocity.x))
+            # if your speed is more then the max speed and youre not standing 
+            if abs(self.velocity.x) > self.max_speed.moving and movement_side != 0:
+                excess_velocity = abs(self.velocity.x) - self.max_speed.moving
+                
+                if self.dash.dashing:
+                    excess_velocity *= self.friction.dashing
+                else:
+                    excess_velocity *= self.friction.standing
+
+                excess_velocity += (50 * movement_side) * dt
+                self.velocity.x = (self.max_speed.moving + excess_velocity) * detection_side
+
+            else:
+                self.velocity.x += (self.acceleration.x * movement_side) * dt
 
             self.position.x += self.velocity.x * dt
 
-
-
         # play sfx
-        if self.touching_ground() and abs(self.velocity.x) > self.speed.sfx_max:
+        if self.touching_ground() and abs(self.velocity.x) > self.max_speed.sfx:
             if not self.playing_walk_sfx:
                 walk_channel.unpause()
                 self.playing_walk_sfx = True
@@ -164,7 +209,7 @@ class Player():
         future_x = self.position.x + self.detection.middle
         future_y = self.position.y + self.velocity.y * dt
         future_width = self.size.width - self.detection.subtract
-        future_height = self.detection.fat
+        future_height = self.detection.size
 
         future_player = pygame.Rect(future_x, future_y, future_width, future_height)
         will_bonk = any(future_player.colliderect(wall) for wall in wall_list)
@@ -176,11 +221,11 @@ class Player():
                     self.velocity.y = 0
 
     def checkpressed(self) -> None:
-        keyPressed = pygame.key.get_pressed()
+        key_pressed = pygame.key.get_pressed()
         
-        left_pressed = any(keyPressed[key] for key in KEYS_LEFT)
-        right_pressed = any(keyPressed[key] for key in KEYS_RIGHT)
-        jump_pressed = any(keyPressed[key] for key in KEYS_UP)
+        left_pressed = any(key_pressed[key] for key in KEYS_LEFT)
+        right_pressed = any(key_pressed[key] for key in KEYS_RIGHT)
+        jump_pressed = any(key_pressed[key] for key in KEYS_UP)
         
         side = 0
 
@@ -194,30 +239,46 @@ class Player():
         if jump_pressed and self.touching_ground() and not self.jump.jumping:
             self.velocity.y = -self.jump.force
             self.jump.jumping = True
-            sfx_jump.play()
+            jump_channel.play(sfx_jump)
 
-        if self.jump.jumping:
-            if jump_pressed:
-                pass
-            else:
-                self.jump.jumping = False
-                if self.velocity.y < -self.jump.release_force:
-                    self.velocity.y = -self.jump.release_force
+        if self.jump.jumping and not jump_pressed:
+            self.jump.jumping = False
+            if self.velocity.y < -self.jump.release_force:
+                self.velocity.y = -self.jump.release_force
+
+        if self.dash_counter():
+            self.dash.dashing = False
+
+            if self.touching_ground():
+                if side != 0:
+                    if key_pressed[pygame.K_LSHIFT]:
+                        self.velocity.x += self.dash.boost_x * side
+                        self.velocity.y += self.dash.boost_y
+                        self.dash.dashing = True
 
     def movement_loop(self) -> None:
         "The movement loop for the player"
         self.checkpressed()
         self.gravity()
+    
+    def dash_counter(self) -> bool:
+        key_pressed = pygame.key.get_pressed()
 
-    def allow_dash(self):
-        return NotImplementedError("will be added later")
+        if not(self.dash.timer >= self.dash.max):
+            self.dash.timer += dt
+            return False
 
+        if key_pressed[pygame.K_LSHIFT]:
+            self.dash.timer = 0
+        
+        return True               
+      
     def touching_ground(self) -> bool:
         # make a future player and check if he touches the ground
         future_x = self.position.x + self.detection.middle
-        future_y = (self.position.y + self.velocity.y * dt) + self.size.height - self.detection.fat + 1
+        future_y = (self.position.y + self.velocity.y * dt) + self.size.height - self.detection.size + 1
         future_width = self.size.width - self.detection.subtract
-        future_height = self.detection.fat
+        future_height = self.detection.size
 
         future_player = pygame.Rect(future_x, future_y, future_width, future_height)
         will_touch_ground = any(future_player.colliderect(wall) for wall in wall_list)
@@ -329,13 +390,16 @@ def level_modifier() -> None:
             index = info["index"]
 
             if player.rect().colliderect(lever_rect):
-                keyPressed = pygame.key.get_pressed()
-                if keyPressed[pygame.K_s]:
+
+                key_pressed = pygame.key.get_pressed()
+                lever_pulled = any(key_pressed[key] for key in KEYS_DOWN)
+
+                if lever_pulled:
                     if allow_lever_pull:
                         allow_lever_pull = False
                         lever_flipped[index] = not(lever_flipped[index])
 
-                        lever_sfxs[randint(1, 8)].play()
+                        lever_sfxs[randint(0, 7)].play()
 
                         level_loader()
                 else:
@@ -363,8 +427,6 @@ def draw() -> None:
         position = info["position"]
 
         pygame.draw.rect(Window, (255, 0, 0), position)
-        pygame.draw.rect(Window, (255, 0, 0), position)
-        pygame.draw.rect(Window, (255, 0, 0), position)
     
     for wall in wall_list:
         pygame.draw.rect(Window, (75, 75, 75), wall)
@@ -377,7 +439,6 @@ def draw() -> None:
 
     for player in players:
         player.draw()
-
 
 def text(string: str, x: float, y: float, color: tuple[int, int, int] = (255, 255, 255)) -> None:
     "Draws text on the screen"
@@ -400,7 +461,6 @@ lever_flipped: list[bool]
 FPS: int
 
 # variables
-counter_bgm = 0
 level = [2, 1]
 level_last_frame = [0, 0]
 wall_list = []
@@ -410,12 +470,14 @@ levers = {
     "lever3": {"position": pygame.Rect(0, 0, 0, 0), "index": 0}
 }
 lever_flipped = [False] * 19
+allow_lever_pull = True
 lever1_x = 1700
 lever2_x = -100
 final_score = 0
+
 players = [Player(768, 509)]
 FPS = 120
-allow_lever_pull = True
+
 
 KEYS_LEFT = [pygame.K_a, pygame.K_j, pygame.K_LEFT]
 KEYS_RIGHT = [pygame.K_d, pygame.K_l, pygame.K_RIGHT]
@@ -433,25 +495,22 @@ pygame.display.set_caption("Gem Hunt Quartz 0.6.1")
 clock = pygame.time.Clock() 
 
 sfx_jump = pygame.mixer.Sound("data/assets/sfx/jump.wav")
+jump_channel = pygame.mixer.Channel(0)
+
 sfx_walk = pygame.mixer.Sound("data/assets/sfx/walk.wav")
-
-walk_channel = pygame.mixer.Channel(0)
+walk_channel = pygame.mixer.Channel(1)
+walk_channel.set_volume(2)
 walk_channel.play(sfx_walk, -1)
-walk_channel.pause()
 
-sfx_lever1 = pygame.mixer.Sound("data/assets/sfx/lever/lever1.wav")
-sfx_lever2 = pygame.mixer.Sound("data/assets/sfx/lever/lever2.wav")
-sfx_lever3 = pygame.mixer.Sound("data/assets/sfx/lever/lever3.wav")
-sfx_lever4 = pygame.mixer.Sound("data/assets/sfx/lever/lever4.wav")
-sfx_lever5 = pygame.mixer.Sound("data/assets/sfx/lever/lever5.wav")
-sfx_lever6 = pygame.mixer.Sound("data/assets/sfx/lever/lever6.wav")
-sfx_lever7 = pygame.mixer.Sound("data/assets/sfx/lever/lever7.wav")
-sfx_lever8 = pygame.mixer.Sound("data/assets/sfx/lever/lever8.wav") 
+lever_sfxs = [
+    pygame.mixer.Sound(f"data/assets/sfx/lever/lever{i}.wav") for i in range(1, 9)
+]
 
-lever_sfxs = [sfx_lever1, sfx_lever2, sfx_lever3, sfx_lever4, sfx_lever5, sfx_lever6, sfx_lever7, sfx_lever8]
+for lever in lever_sfxs:
+    lever.set_volume(0.5)
 
 bgm = pygame.mixer.music.load("data/assets/sfx/bgm.wav")
-pygame.mixer.music.set_volume(1)
+pygame.mixer.music.set_volume(0.6)
 pygame.mixer.music.play(-1)
 
 # game loop
