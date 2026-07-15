@@ -1,4 +1,4 @@
-# Gem Hunt Quartz 0.7.1 - fixed bug
+# Gem Hunt Quartz 0.7.2 - sfx for dashing
 from json import load, dump
 from typing import Any
 import pygame
@@ -91,6 +91,14 @@ class Player():
             self.subtract = 6
             self.middle = self.subtract / 2
 
+    class PlayingSfx:
+        def __init__(self) -> None:
+            self.walk: bool
+            self.dash: bool
+
+            self.walk = False
+            self.dash = False
+
     def __init__(self, x: float, y: float) -> None:
         # type definitons
         self.position: Player.Position
@@ -109,7 +117,7 @@ class Player():
         self.dash = self.Dash()
         self.friction = self.Friction()
         self.acceleration = self.Acceleration()
-        self.playing_walk_sfx = False
+        self.playing_sfx = self.PlayingSfx()
 
     def gravity(self) -> None:
         if self.velocity.y <= 0:
@@ -159,7 +167,6 @@ class Player():
 
         if will_touch_walls:
             # move you away from the walls
-
             for wall in wall_list:
                 if future_player.colliderect(wall):
                     if detection_side == 1: # right
@@ -171,7 +178,6 @@ class Player():
                         self.velocity.x = 0
         else:
             # apply velocity
-
             if movement_side == 0:
                 # apply friction
                 self.velocity.x *= self.friction.standing
@@ -187,10 +193,14 @@ class Player():
                 else:
                     excess_velocity *= self.friction.standing
 
-                if movement_side != detection_side:
-                    excess_velocity += (self.acceleration.x * movement_side) * dt
 
-                self.velocity.x = (self.max_speed.moving + excess_velocity) * detection_side
+                self.velocity.x = 0
+
+                if movement_side != detection_side:
+                    self.velocity.x += (self.acceleration.x * movement_side) * dt
+
+                self.velocity.x += (self.max_speed.moving + excess_velocity) * detection_side
+                print(self.velocity.x)
 
             else:
                 self.velocity.x += (self.acceleration.x * movement_side) * dt
@@ -199,12 +209,12 @@ class Player():
 
         # play sfx
         if self.touching_ground() and abs(self.velocity.x) > self.max_speed.sfx:
-            if not self.playing_walk_sfx:
+            if not self.playing_sfx.walk:
                 walk_channel.unpause()
-                self.playing_walk_sfx = True
+                self.playing_sfx.walk = True
         else:
             walk_channel.pause()
-            self.playing_walk_sfx = False
+            self.playing_sfx.walk = False
 
     def headhit(self) -> None:
         # we make a future player
@@ -222,15 +232,15 @@ class Player():
                     self.position.y = wall.bottom
                     self.velocity.y = 0
 
-    def checkpressed(self) -> None:
+    def movement_imput(self) -> None:
         key_pressed = pygame.key.get_pressed()
-        
         left_pressed = any(key_pressed[key] for key in KEYS_LEFT)
         right_pressed = any(key_pressed[key] for key in KEYS_RIGHT)
         jump_pressed = any(key_pressed[key] for key in KEYS_UP)
-        
-        side = 0
 
+        side = 0
+        
+        # horizontal movement
         if left_pressed:
             side -= 1
         if right_pressed:
@@ -238,17 +248,20 @@ class Player():
 
         self.horizontal(side)
 
-        if jump_pressed and self.touching_ground() and not self.jump.jumping:
-            self.velocity.y = -self.jump.force
-            self.jump.jumping = True
-            jump_channel.play(sfx_jump)
+        # jumping
+        if True:
+            if jump_pressed and self.touching_ground() and not self.jump.jumping:
+                self.velocity.y = -self.jump.force
+                self.jump.jumping = True
+                jump_channel.play(sfx_jump)
 
-        if self.jump.jumping and not jump_pressed:
-            self.jump.jumping = False
-            if self.velocity.y < -self.jump.release_force:
-                self.velocity.y = -self.jump.release_force
+            if self.jump.jumping and not jump_pressed:
+                self.jump.jumping = False
+                if self.velocity.y < -self.jump.release_force:
+                    self.velocity.y = -self.jump.release_force
 
-        if self.dash_counter():
+        # dashing
+        if self.dash_counter(side):
             self.dash.dashing = False
 
             if self.touching_ground():
@@ -257,24 +270,30 @@ class Player():
                         self.velocity.x += self.dash.boost_x * side
                         self.velocity.y += self.dash.boost_y
                         self.dash.dashing = True
+                        sfx_dash.play()
 
-    def movement_loop(self) -> None:
-        "The movement loop for the player"
-        self.checkpressed()
-        self.gravity()
-    
-    def dash_counter(self) -> bool:
+    def dash_counter(self, side) -> bool:
         key_pressed = pygame.key.get_pressed()
 
         if not(self.dash.timer >= self.dash.max):
             self.dash.timer += dt
             return False
+        
+        if not(self.playing_sfx.dash):
+            self.playing_sfx.dash = True
+            sfx_get_dash.play()
 
-        if key_pressed[pygame.K_LSHIFT]:
+        if key_pressed[pygame.K_LSHIFT] and side != 0:
+            self.playing_sfx.dash = False
             self.dash.timer = 0
         
         return True               
-      
+
+    def movement_loop(self) -> None:
+        "The movement loop for the player"
+        self.movement_imput()
+        self.gravity()
+    
     def touching_ground(self) -> bool:
         # make a future player and check if he touches the ground
         future_x = self.position.x + self.detection.middle
@@ -480,7 +499,6 @@ final_score = 0
 players = [Player(768, 509)]
 FPS = 120
 
-
 KEYS_LEFT = [pygame.K_a, pygame.K_j, pygame.K_LEFT]
 KEYS_RIGHT = [pygame.K_d, pygame.K_l, pygame.K_RIGHT]
 KEYS_UP = [pygame.K_w, pygame.K_SPACE, pygame.K_i, pygame.K_UP]
@@ -496,6 +514,7 @@ Window = pygame.display.set_mode(windowSize)
 pygame.display.set_caption("Gem Hunt Quartz 0.6.1")
 clock = pygame.time.Clock() 
 
+# sfx
 sfx_jump = pygame.mixer.Sound("data/assets/sfx/jump.wav")
 jump_channel = pygame.mixer.Channel(0)
 
@@ -503,6 +522,9 @@ sfx_walk = pygame.mixer.Sound("data/assets/sfx/walk.wav")
 walk_channel = pygame.mixer.Channel(1)
 walk_channel.set_volume(2)
 walk_channel.play(sfx_walk, -1)
+
+sfx_get_dash = pygame.mixer.Sound("data/assets/sfx/get_dash.wav")
+sfx_dash = pygame.mixer.Sound("data/assets/sfx/dash.wav")
 
 lever_sfxs = [
     pygame.mixer.Sound(f"data/assets/sfx/lever/lever{i}.wav") for i in range(1, 9)

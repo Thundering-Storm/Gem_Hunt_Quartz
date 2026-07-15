@@ -19,6 +19,11 @@ Rautatievaihde, vaihde / Manual railway switch, points, metal lever rattling and
 
 Column Gear Select Up (mono).wav by E-Audio -- https://freesound.org/s/118243/ -- License: Creative Commons 0
 
+get dash:
+whoosh_into_hit_flanged_001.wav by alanmcki -- https://freesound.org/s/461024/ -- License: Attribution 4.0
+
+dash:
+Whoosh For Whip Zoom by BennettFilmTeacher -- https://freesound.org/s/486234/ -- License: Creative Commons 0
 
 background music:
 background music loop drums by theoctopus559 -- https://freesound.org/s/624363/ -- License: Attribution 4.0
